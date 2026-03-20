@@ -7,8 +7,8 @@ import QuestionCard from '@/components/quiz/QuestionCard';
 import ProgressBar from '@/components/quiz/ProgressBar';
 import ResultCard from '@/components/quiz/ResultCard';
 import { ArrowLeft, ChevronRight, User } from 'lucide-react';
-import Link from 'next/link';
 import { fetchQuizzes } from '@/lib/api';
+import Link from 'next/link';
 
 export default function QuizSystemPage() {
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -91,9 +91,12 @@ export default function QuizSystemPage() {
                 <img src="/nyayalogo.png" alt="Nyaya Logo" className="h-8 md:h-10 w-auto" />
                 <span className="font-serif font-bold text-navy-900 text-lg md:text-xl tracking-tight">NYAYA.LK</span>
             </div>
-            <button className="w-11 h-11 md:w-12 md:h-12 bg-navy-900 text-white rounded-full hover:bg-navy-800 transition shadow-sm flex items-center justify-center">
+            <Link
+                href="/dashboard"
+                className="w-11 h-11 md:w-12 md:h-12 bg-navy-900 text-white rounded-full hover:bg-navy-800 transition shadow-sm flex items-center justify-center"
+            >
                 <User className="w-5 h-5 md:w-5 md:h-5 text-gold-500" />
-            </button>
+            </Link>
         </div>
     );
 

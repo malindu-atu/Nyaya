@@ -3,6 +3,7 @@
 import { LayoutDashboard, PlayCircle, Trophy, Clock, Target, BarChart2, LogOut, User, History, Calendar, Mail } from "lucide-react";
 import Image from "next/image";
 import { useQuizDashboardLogic } from "@/lib/QuizDashboard";
+import Link from 'next/link';
 
 export default function QuizDashboard() {
   const { 
@@ -191,12 +192,13 @@ export default function QuizDashboard() {
               </button>
 
               {/* Start Quiz Button (50%) */}
-              <button 
-                className="flex-1 flex items-center justify-center gap-2 bg-[#1e293b] hover:bg-[#0f172a] text-white py-4 rounded-2xl font-bold transition-all shadow-md active:scale-95 group"
-              >
+              <Link
+    href="/quiz"
+    className="flex-1 flex items-center justify-center gap-2 bg-[#1e293b] hover:bg-[#0f172a] text-white py-4 rounded-2xl font-bold transition-all shadow-md active:scale-95 group"
+>
                 <PlayCircle size={20} className="group-hover:translate-x-1 transition-transform" />
                 <span className="text-sm whitespace-nowrap">Start Quiz</span>
-              </button>
+                </Link>
 
             </div>
 
