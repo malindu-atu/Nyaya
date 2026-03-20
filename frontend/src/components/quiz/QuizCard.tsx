@@ -23,7 +23,12 @@ export default function QuizCard({ quiz, onClick }: QuizCardProps) {
         },
     };
 
-    const style = difficultyStyles[quiz.difficulty];
+    // Add a fallback (||) to ensure style is never undefined
+    const style = difficultyStyles[quiz.difficulty] || difficultyStyles['Medium'] || {
+        border: 'border-gray-200',
+        text: 'text-gray-600',
+        bg: 'bg-gray-100'
+    };
 
     return (
         <div
