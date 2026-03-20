@@ -5,6 +5,17 @@ const nextConfig: NextConfig = {
   env: {
     NYAYA_BACKEND_URL: process.env.NYAYA_BACKEND_URL ?? "http://localhost:8000",
   },
+
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'dvedihftsryhuulhdgjy.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;
