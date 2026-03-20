@@ -1,4 +1,5 @@
-from sentence_transformers import SentenceTransformer
+import openai
+from openai import AzureOpenAI
 from config import QDRANT_COLLECTION
 import hashlib
 import os
@@ -141,14 +142,23 @@ class VectorRetriever:
         self.client = create_qdrant_client()
         self.collection_name = QDRANT_COLLECTION
         self.breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
-        # Use local_files_only to avoid network permission issues on Windows
-        self.model = SentenceTransformer(
-            "sentence-transformers/all-MiniLM-L6-v2",
-            local_files_only=True
+        # Azure OpenAI client for embeddings — no local model needed
+        self._embed_client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         )
+        self._embed_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
+
+    def _embed(self, text: str) -> list:
+        response = self._embed_client.embeddings.create(
+            input=text,
+            model=self._embed_deployment,
+        )
+        return response.data[0].embedding
 
     def search(self, query, top_k=5, return_metadata=True):
-        query_vector = self.model.encode(query).tolist()
+        query_vector = self._embed(query)  # API call instead of local model
 
         results = call_with_retry(
             self.client.query_points,
@@ -162,7 +172,6 @@ class VectorRetriever:
         )
 
         return _enrich_points(results.points, return_metadata)
-
 
 class HybridRetriever:
     """
