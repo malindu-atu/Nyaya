@@ -1,17 +1,20 @@
 "use client";
 
-import Link from 'next/link';
-import Image from 'next/image';
-import { useSignUpSuccessLogic } from '@/lib/SignUpSuccess';
+import Image from "next/image";
+import Link from "next/link";
 
-export default function SignUpSuccess() {
-  // Destructure data from the logic hook
-  const { firstName, surname, username, email } = useSignUpSuccessLogic();
+// 1. Define what data matches the props passed from page.tsx
+interface SignUpSuccessProps {
+  firstName: string;
+  surname: string;
+  username: string;
+  email: string;
+}
 
+// 2. Destructure these props in the function signature
+export default function SignUpSuccess({ firstName, surname, username, email }: SignUpSuccessProps) {
   return (
-    /* This container ensures the card stays exactly 450px wide, matching your Signup form */
-    <div className="w-[450px] bg-white rounded-3xl shadow-xl p-10 flex flex-col items-center mx-auto">
-      
+    <div className="flex flex-col items-center bg-white p-8 rounded-2xl shadow-xl w-full max-w-md mx-4 animate-in fade-in zoom-in duration-300">
       {/* NYAYA Logo */}
       <div className="flex justify-center mb-4">
         <Image 
