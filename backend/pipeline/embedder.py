@@ -7,7 +7,7 @@ load_dotenv()
 
 HF_API_KEY = os.getenv("HF_API_KEY")
 HF_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-API_URL = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{HF_MODEL}"
+API_URL = f"https://router.huggingface.co/pipeline/feature-extraction/{HF_MODEL}"
 
 
 def _embed_batch(texts: list) -> list:
