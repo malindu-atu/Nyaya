@@ -99,7 +99,7 @@ export default function QuizSystemPage() {
             <div className="min-h-screen bg-white p-6 md:p-12 pb-24 relative overflow-hidden font-sans">
                 <Watermark />
 
-                <div className="max-w-6xl mx-auto relative z-10 pt-16 mt-8">
+                <div className="max-w-6xl mx-auto relative z-10 pt-4 mt-4">
                     <div className="flex items-center justify-between mb-12">
                         <div className="flex items-center gap-4">
                             <Link href="/" className="p-2 bg-white rounded-full hover:bg-gray-100 transition shadow-sm">
@@ -171,7 +171,7 @@ export default function QuizSystemPage() {
             <Watermark />
        
 
-            <div className="w-full max-w-4xl mx-auto flex-1 flex flex-col relative z-10 pt-16 mt-4">
+            <div className="w-full max-w-4xl mx-auto flex-1 flex flex-col relative z-10 pt-4 mt-4">
                 <div className="flex items-center justify-between mb-8">
                     <button onClick={backToList} className="flex items-center px-4 py-2 bg-white rounded-full text-sm font-medium text-navy-900 hover:bg-gray-100 transition shadow-sm">
                         <ArrowLeft className="w-4 h-4 mr-2" />
