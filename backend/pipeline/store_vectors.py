@@ -61,6 +61,7 @@ def store_in_qdrant(chunks, embeddings, pdf_name, replace_pdf=False):
     for chunk, embedding in zip(chunks, embeddings):
         # Convert tensor to list if needed
         vector = embedding.tolist() if hasattr(embedding, "tolist") else embedding
+        
 
         if isinstance(chunk, dict):
             page_value = chunk.get("page")
