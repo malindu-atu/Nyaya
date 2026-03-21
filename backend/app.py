@@ -293,6 +293,22 @@ def health_check():
         "status": "healthy",
         "version": "1.0.0"
     }
+    
+@app.get("/test-embed")
+async def test_embed():
+    """Temporary debug endpoint — remove after testing"""
+    from agent.retriever import _embed_query, VectorRetriever
+    try:
+        vec = _embed_query("burden of proof")
+        r = VectorRetriever()
+        results = r.search("burden of proof", top_k=3)
+        return {
+            "embed_dims": len(vec),
+            "results_count": len(results),
+            "first_result": results[0].get("text", "")[:200] if results else None
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # Main query endpoint
