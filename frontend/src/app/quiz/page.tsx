@@ -109,7 +109,7 @@ export default function QuizSystemPage() {
     // View: Quiz List
     if (!activeQuizId || !activeQuiz) {
         return (
-            <div className="min-h-screen bg-gray-50/20 p-6 md:p-12 pb-24 relative overflow-hidden font-sans">
+            <div className="min-h-screen bg-white p-6 md:p-12 pb-24 relative overflow-hidden font-sans">
                 <Watermark />
                 <Navbar />
 
@@ -156,7 +156,7 @@ export default function QuizSystemPage() {
     // View: Result
     if (quizCompleted) {
         return (
-            <div className="min-h-screen bg-gray-50/20 flex flex-col items-center justify-center p-6 pb-20 relative font-sans">
+            <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 pb-20 relative font-sans">
                 <Navbar />
                 <div className="absolute top-24 md:top-28 left-8 z-10">
                     <button onClick={backToList} className="flex items-center text-sm font-medium text-navy-900/60 hover:text-navy-900 transition-colors">
@@ -181,7 +181,7 @@ export default function QuizSystemPage() {
 
     // View: Active Question
     return (
-        <div className="min-h-screen bg-gray-50/20 flex flex-col p-6 md:p-12 pb-24 relative overflow-hidden font-sans">
+        <div className="min-h-screen bg-white flex flex-col p-6 md:p-12 pb-24 relative overflow-hidden font-sans">
             <Watermark />
             <Navbar />
 
