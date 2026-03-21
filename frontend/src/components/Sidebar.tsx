@@ -102,10 +102,7 @@ export default function Sidebar({
                     <span className="font-medium text-sm truncate">New Chat</span>
                 </button>
 
-                <Link href="/quiz" className="w-full flex items-center gap-3 px-4 py-3 hover:bg-navy-800 rounded-xl transition-colors text-white/80 hover:text-white">
-                    <HelpCircle className="w-5 h-5" />
-                    <span className="font-medium text-sm truncate">Quiz Me</span>
-                </Link>
+                
             </div>
 
             {/* History Section */}
