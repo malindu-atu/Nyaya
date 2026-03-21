@@ -1,41 +1,44 @@
 # embedder.py
 import os
+import requests
 from dotenv import load_dotenv
-from openai import AzureOpenAI
 
 load_dotenv()
 
-_client = AzureOpenAI(
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-)
-_DEPLOYMENT = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
+HF_API_KEY = os.getenv("HF_API_KEY")
+HF_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+API_URL = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{HF_MODEL}"
+
+
+def _embed_batch(texts: list) -> list:
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+    response = requests.post(
+        API_URL,
+        headers=headers,
+        json={"inputs": texts, "options": {"wait_for_model": True}},
+        timeout=60,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"HuggingFace API error {response.status_code}: {response.text}")
+    return response.json()
 
 
 def embed_chunks(chunks):
     """
-    Takes a list of text chunks and returns embeddings using Azure OpenAI.
-    Returns a list of embedding vectors (list of floats).
+    Takes a list of text chunks and returns embeddings (384-dim)
+    using the HuggingFace Inference API — no local model needed.
     """
     if not chunks:
         return []
 
-    # Azure OpenAI allows up to 2048 inputs per request
-    # Split into batches to avoid hitting limits
-    BATCH_SIZE = 100
+    BATCH_SIZE = 32  # HF free tier works best with smaller batches
     all_embeddings = []
 
     for i in range(0, len(chunks), BATCH_SIZE):
         batch = chunks[i:i + BATCH_SIZE]
-        # Replace newlines which can affect embedding quality
         batch = [text.replace("\n", " ") for text in batch]
         print(f"  Embedding batch {i // BATCH_SIZE + 1}/{(len(chunks) - 1) // BATCH_SIZE + 1} ({len(batch)} chunks)...")
-        response = _client.embeddings.create(
-            input=batch,
-            model=_DEPLOYMENT,
-        )
-        batch_embeddings = [item.embedding for item in response.data]
-        all_embeddings.extend(batch_embeddings)
+        embeddings = _embed_batch(batch)
+        all_embeddings.extend(embeddings)
 
     return all_embeddings
