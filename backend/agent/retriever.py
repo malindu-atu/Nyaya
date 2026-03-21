@@ -23,7 +23,7 @@ _RERANKER_ENABLED = os.getenv("NYAYA_RERANKER", "0").strip().lower() not in {"0"
 
 _HF_API_KEY = os.getenv("HF_API_KEY")
 _HF_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-_HF_API_URL = f"https://router.huggingface.co/pipeline/feature-extraction/{_HF_MODEL}"
+_HF_API_URL = f"https://router.huggingface.co/hf-inference/models/{_HF_MODEL}/pipeline/feature-extraction"
 
 # Lazily loaded cross-encoder (only when NYAYA_RERANKER=1)
 _cross_encoder = None

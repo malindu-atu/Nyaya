@@ -31,3 +31,5 @@ pydantic-settings>=2.0.0,<3.0.0
 
 # HuggingFace API (replaces local sentence-transformers)
 requests>=2.31.0
+
+psycopg2-binary>=2.9.0
