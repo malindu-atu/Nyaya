@@ -192,7 +192,9 @@ export default function QuizDashboard() {
             </button>
 
             {/* Start Quiz Button*/}
-            <button className="flex-1 flex items-center justify-center gap-2 bg-[#1e293b] hover:bg-[#0f172a] text-white py-4 rounded-2xl font-bold transition-all shadow-md active:scale-95 group">
+            <button 
+              onClick={() => router.push("/quiz")}
+              className="flex-1 flex items-center justify-center gap-2 bg-[#1e293b] hover:bg-[#0f172a] text-white py-4 rounded-2xl font-bold transition-all shadow-md active:scale-95 group">
               <PlayCircle
                 size={20}
                 className="group-hover:translate-x-1 transition-transform"
