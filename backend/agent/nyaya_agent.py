@@ -104,21 +104,9 @@ class NyayaAgent:
             return "Sorry, I couldn't find enough relevant information for that question in the current database."
 
         best_text, best_chunk = unique[0]
-        best_excerpt = best_text[:420].strip()
+        best_excerpt = best_text[:350].strip()
 
-        lines = [
-            "### Direct Answer",
-            (
-                "Based on the retrieved Sri Lankan authority, judicial review is framed as a control "
-                "on misuse or excess of public power to protect the rule of law."
-                if "judicial review" in query.lower() else best_excerpt
-            ),
-            "",
-            "### Evidence from Retrieved Text",
-            f"- {best_excerpt}",
-            "",
-            "### Sources",
-        ]
+        lines = ["Direct answer:", best_excerpt, "", "Sources:"]
 
         for i, (_, chunk) in enumerate(unique, 1):
             if not isinstance(chunk, dict):
@@ -130,11 +118,9 @@ class NyayaAgent:
         lines.append("")
         error_text = (self.last_llm_error or "").lower()
         if any(marker in error_text for marker in ["resource_exhausted", "quota", "429", "api"]):
-            lines.append("### Note")
-            lines.append("This response is retrieval-only because the Azure OpenAI API is currently unavailable.")
+            lines.append("Note: This response is retrieval-only because the Azure OpenAI API is currently unavailable.")
         else:
-            lines.append("### Note")
-            lines.append("This response is retrieval-only because the LLM is currently unavailable.")
+            lines.append("Note: This response is retrieval-only because the LLM is currently unavailable.")
         return "\n".join(lines)
 
     def _build_case_source_block(self, case_name, top_k=2):
@@ -439,23 +425,21 @@ class NyayaAgent:
 
 **Question:** {query}
 
-**How to answer (MUST follow this exact structure):**
-### Direct Answer
-Provide a direct answer in 2-4 sentences.
+**How to answer:**
+- Write in natural, conversational English (like ChatGPT or Gemini)
+- Explain concepts clearly, don't just copy-paste
+- Use proper grammar and complete sentences
+- Include case citations naturally in your explanation
+- If you need to quote, paraphrase it naturally
+- Keep it concise (2 short paragraphs max)
+- Start with the general legal rule first, then explain any section-specific application
+- If the context is narrow, explicitly say it is a specific example and avoid presenting it as the whole law
+- End with a one-line takeaway
 
-### Legal Basis
-- State the governing principle from the retrieved material.
-- If the material is narrow or non-exhaustive, say that explicitly.
+Example good answer:
+"In Sri Lankan law, the burden of proof works differently depending on the case type. For civil cases, the standard is 'balance of probabilities' - meaning you just need to show it's more likely than not. But for criminal cases, it's much stricter: 'beyond reasonable doubt.' This distinction was emphasized in the case of Karunaratne v. Republic (1981), where the Supreme Court clarified these standards."
 
-### Practical Takeaway
-One sentence users can act on.
-
-Rules:
-- Use only retrieved sources.
-- Do not invent enumerated lists if the sources do not provide one.
-- Keep citations precise and limited to retrieved files/pages.
-- Keep total length under 170 words.
-"""
+Now answer the user's question naturally:"""
         
         try:
             if history:
@@ -545,7 +529,7 @@ Rules:
                 groundedness_value = float(groundedness)
             reflection_report["temporal_warnings"] = temporal_warnings
 
-            result = {
+            return {
                 "question": query,
                 "answer": answer,
                 "status": "success",
@@ -556,7 +540,6 @@ Rules:
                 "debug_trace": debug_trace,
                 "latency_seconds": round(time.time() - start_total, 3),
             }
-            return result
         except Exception as e:
             error_msg = str(e)
             if self.show_debug:
@@ -590,7 +573,7 @@ Meanwhile, here's what I found in the documents:
                 }
 
             fallback = self._build_retrieval_fallback_answer(query, clean_chunks)
-            result = {
+            return {
                 "question": query,
                 "answer": fallback,
                 "status": "fallback",
@@ -601,7 +584,6 @@ Meanwhile, here's what I found in the documents:
                 "debug_trace": debug_trace,
                 "latency_seconds": round(time.time() - start_total, 3),
             }
-            return result
 
     def ask(self, query):
         """
