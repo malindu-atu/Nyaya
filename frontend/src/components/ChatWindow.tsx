@@ -41,19 +41,6 @@ export default function ChatWindow({ messages, isTyping, onSendMessage }: ChatWi
                 <img src="/logolaw.png" alt="Nyaya Background" className="h-[70vh] md:h-[90vh] lg:h-[120vh] max-w-none lg:translate-x-[15%] lg:translate-y-[20%] translate-x-[20%] translate-y-[15%] object-contain select-none grayscale" />
             </div>
 
-            {/* Navbar */}
-            <div className="w-full absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 md:p-6 pl-14 md:pl-24">
-                <div className="flex items-center gap-2.5">
-                    <img src="/nyayalogo.png" alt="Nyaya Logo" className="h-8 md:h-10 w-auto" />
-                    <span className="font-serif font-bold text-navy-900 text-lg md:text-xl tracking-tight">NYAYA.LK</span>
-                </div>
-                <Link
-                    href="/dashboard"
-                    className="w-11 h-11 md:w-12 md:h-12 bg-navy-900 text-white rounded-full hover:bg-navy-800 transition shadow-sm flex items-center justify-center"
-                >
-                    <User className="w-5 h-5 md:w-5 md:h-5 text-gold-500" />
-                </Link>
-            </div>
 
             {/* Chat Content or Empty State */}
             <div className="flex-1 overflow-y-auto z-10 custom-scrollbar relative mt-18 md:mt-22 mb-24">
