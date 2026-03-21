@@ -52,7 +52,7 @@ export default function Navbar() {
 
           {/* Link to the Revision Quiz section */}
           <NavLink 
-            href="/revision-quiz" 
+            href="/quiz" 
             icon={<ClipboardCheck size={18} />} 
             label="Revision Quiz" 
             active={pathname === "/quiz"} 
