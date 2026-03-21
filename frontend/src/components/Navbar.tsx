@@ -3,6 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { 
   LayoutDashboard, 
   User, 
@@ -11,21 +13,37 @@ import {
 } from "lucide-react";
 
 export default function Navbar() {
-  // Hook to get the current URL path for highlighting the active button
   const pathname = usePathname();
+  const [dashboardHref, setDashboardHref] = useState("/dashboard");
 
-  // Array of paths where the Navbar should be hidden (Auth pages)
+  useEffect(() => {
+    const checkRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "admin") {
+        setDashboardHref("/admin/dashboard");
+      } else {
+        setDashboardHref("/dashboard");
+      }
+    };
+
+    checkRole();
+  }, []);
+
   const hideOnPaths = ["/login", "/signup", "/signup_success"];
-  
-  // If the current path is in the hide list, return null (render nothing)
   if (hideOnPaths.includes(pathname)) return null;
 
   return (
-    // 'sticky top-0' keeps the nav at the top. 
     <nav className="sticky top-0 z-50 w-full bg-[#0f172a] backdrop-blur-md border-b border-[#0f172a]">
       <div className="w-full px-4 h-16 flex items-center justify-between">
         
-        {/* LOGO SECTION: Links back to the landing page/home */}
         <Link href="/" className="flex items-center gap-2 group">
           <Image 
             src="/Nyaya_logo_temp.png" 
@@ -39,10 +57,8 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* NAVIGATION LINKS CONTAINER */}
         <div className="flex items-center gap-2 md:gap-6">
-          
-          {/* Link to the Citation Management tool */}
+
           <NavLink 
             href="/" 
             icon={<BookOpen size={18} />} 
@@ -50,7 +66,6 @@ export default function Navbar() {
             active={pathname === "/"} 
           />
 
-          {/* Link to the Revision Quiz section */}
           <NavLink 
             href="/quiz" 
             icon={<ClipboardCheck size={18} />} 
@@ -58,15 +73,13 @@ export default function Navbar() {
             active={pathname === "/quiz"} 
           />
 
-          {/* Link to the user's main Dashboard */}
           <NavLink 
-            href="/dashboard" 
+            href={dashboardHref} 
             icon={<LayoutDashboard size={18} />} 
             label="Dashboard" 
-            active={pathname === "/dashboard"} 
+            active={pathname === "/dashboard" || pathname === "/admin/dashboard"} 
           />
 
-          {/* Link to the User Profile/Account settings */}
           <NavLink 
             href="/dashboard/profile-display" 
             icon={<User size={18} />} 
@@ -80,24 +93,17 @@ export default function Navbar() {
   );
 }
 
-/**
- * Reusable NavLink component to keep the code DRY (Don't Repeat Yourself).
- * Manages the hover effects and active state styling for every nav button.
- */
 function NavLink({ href, icon, label, active }: { href: string, icon: React.ReactNode, label: string, active: boolean }) {
   return (
     <Link 
       href={href} 
       className={`flex items-center gap-1.5 text-xs md:text-sm font-semibold transition-all px-3 py-2 rounded-lg ${
         active 
-          // Styles for the active page
           ? 'text-[#c5a059] bg-[#fdf8ef]' 
-          // Styles for inactive pages (with hover effects)
           : 'text-gray-500 hover:text-[#1e293b] hover:bg-gray-50'
       }`}
     >
       {icon}
-      {/* 'hidden sm:inline' hides the text label on mobile to save space, showing only the icon */}
       <span className="hidden sm:inline">{label}</span>
     </Link>
   );
