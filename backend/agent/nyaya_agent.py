@@ -104,9 +104,17 @@ class NyayaAgent:
             return "Sorry, I couldn't find enough relevant information for that question in the current database."
 
         best_text, best_chunk = unique[0]
-        best_excerpt = best_text[:350].strip()
+        best_excerpt = best_text[:420].strip()
 
-        lines = ["Direct answer:", best_excerpt, "", "Sources:"]
+        lines = [
+            "### Direct Answer",
+            best_excerpt,
+            "",
+            "### Evidence from Retrieved Text",
+            f"- {best_excerpt[:300]}",
+            "",
+            "### Sources",
+        ]
 
         for i, (_, chunk) in enumerate(unique, 1):
             if not isinstance(chunk, dict):
@@ -118,9 +126,11 @@ class NyayaAgent:
         lines.append("")
         error_text = (self.last_llm_error or "").lower()
         if any(marker in error_text for marker in ["resource_exhausted", "quota", "429", "api"]):
-            lines.append("Note: This response is retrieval-only because the Azure OpenAI API is currently unavailable.")
+            lines.append("### Note")
+            lines.append("This response is retrieval-only because the AI backend is currently unavailable.")
         else:
-            lines.append("Note: This response is retrieval-only because the LLM is currently unavailable.")
+            lines.append("### Note")
+            lines.append("This response is retrieval-only because the LLM is currently unavailable.")
         return "\n".join(lines)
 
     def _build_case_source_block(self, case_name, top_k=2):
@@ -409,37 +419,39 @@ class NyayaAgent:
         # Build prompt for LLM - conversational ChatGPT-style
         prompt = f"""{SYSTEM_PROMPT}
 
-    Use this structured workflow:
-    1) Analyze the question and identify case names.
-    2) Prefer graph-derived legal context when case names are present.
-    3) Draft the answer using retrieved context only.
-    4) Avoid unsupported section/page references.
+You are answering a Sri Lankan legal question. Follow this EXACT structure:
 
-    You are Nyaya, a helpful Sri Lankan legal assistant. Answer questions naturally like ChatGPT, using the provided legal documents as your source.
+### Direct Answer
+Provide a clear, direct answer in 2–3 sentences. Be specific.
 
-**Context from case law:**
+### Legal Basis
+- Cite the governing principle from the retrieved material.
+- If the material is narrow or non-exhaustive, explicitly say so.
+- Only cite information present in the documents below.
+
+### Practical Takeaway
+One sentence summarizing the key practical implication.
+
+---
+
+**Retrieved Legal Context:**
 {context_text}
 
-    **Graph Context:**
-    {chr(10).join(graph_context_lines) if graph_context_lines else 'No explicit graph context available.'}
+**Citation Graph Context:**
+{chr(10).join(graph_context_lines) if graph_context_lines else 'No explicit graph context available.'}
 
-**Question:** {query}
+**User Question:** {query}
 
-**How to answer:**
-- Write in natural, conversational English (like ChatGPT or Gemini)
-- Explain concepts clearly, don't just copy-paste
-- Use proper grammar and complete sentences
-- Include case citations naturally in your explanation
-- If you need to quote, paraphrase it naturally
-- Keep it concise (2 short paragraphs max)
-- Start with the general legal rule first, then explain any section-specific application
-- If the context is narrow, explicitly say it is a specific example and avoid presenting it as the whole law
-- End with a one-line takeaway
+---
 
-Example good answer:
-"In Sri Lankan law, the burden of proof works differently depending on the case type. For civil cases, the standard is 'balance of probabilities' - meaning you just need to show it's more likely than not. But for criminal cases, it's much stricter: 'beyond reasonable doubt.' This distinction was emphasized in the case of Karunaratne v. Republic (1981), where the Supreme Court clarified these standards."
+**CRITICAL RULES:**
+- Use ONLY information from the retrieved documents.
+- Do NOT invent enumerated lists if documents don't provide one.
+- Keep citations precise (PDF name, page number only).
+- Total length must be under 170 words.
+- If unsure, say "The retrieved material does not provide sufficient detail on this."
 
-Now answer the user's question naturally:"""
+**Now provide your structured answer:**"""
         
         try:
             if history:

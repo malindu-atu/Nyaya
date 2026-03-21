@@ -7,7 +7,11 @@ from resilience import CircuitBreaker, call_with_retry
 
 load_dotenv()
 
-# Try Azure OpenAI first, fallback to Gemini
+# LLM Temperature (0=deterministic, >0.5=creative). Default 0.35 for balanced responses
+LLM_TEMPERATURE = float(os.getenv("NYAYA_LLM_TEMPERATURE", "0.35"))
+
+# Try HuggingFace first, fallback to Azure OpenAI, then Gemini
+HUGGINGFACE_MODEL_NAME = os.getenv("HUGGINGFACE_MODEL_NAME", "")
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-35-turbo")
@@ -19,10 +23,21 @@ llm_backend: Optional[str] = None
 client: Any = None
 azure_client: Any = None
 gemini_client: Any = None
+hf_pipeline: Any = None
 azure_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
 gemini_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
 
-if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
+if HUGGINGFACE_MODEL_NAME:
+    try:
+        from transformers import pipeline  # type: ignore
+        hf_pipeline = pipeline("text-generation", model=HUGGINGFACE_MODEL_NAME, device=0)
+        client = hf_pipeline
+        llm_backend = "huggingface"
+        print(f"[LLM] Using HuggingFace: {HUGGINGFACE_MODEL_NAME}")
+    except Exception as e:
+        print(f"[LLM] HuggingFace init failed: {e}")
+
+if not llm_backend and AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
     try:
         from openai import AzureOpenAI
         azure_client = AzureOpenAI(
@@ -48,7 +63,10 @@ if not llm_backend and GEMINI_API_KEY:
         print(f"[LLM] Gemini init failed: {e}")
 
 if not llm_backend:
-    print("[WARNING] No LLM configured! Set AZURE_OPENAI_API_KEY or GEMINI_API_KEY in .env")
+    print("[WARNING] No LLM configured! Set one of:")
+    print("  - HUGGINGFACE_MODEL_NAME (recommended, e.g., 'meta-llama/Llama-2-7b-hf')")
+    print("  - AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT")
+    print("  - GEMINI_API_KEY")
     print("Get free Gemini key: https://makersuite.google.com/app/apikey")
 
 
@@ -56,12 +74,28 @@ def generate_answer(prompt):
     """Generate natural language answer using configured LLM"""
     if not llm_backend:
         raise RuntimeError(
-            "No LLM configured. Set AZURE_OPENAI_API_KEY or GEMINI_API_KEY in .env\n"
-            "Get free Gemini key: https://makersuite.google.com/app/apikey"
+            "No LLM configured. Set HUGGINGFACE_MODEL_NAME or AZURE_OPENAI_API_KEY or GEMINI_API_KEY in .env"
         )
     
     try:
-        if llm_backend == "azure":
+        if llm_backend == "huggingface":
+            if not hf_pipeline:
+                raise RuntimeError("HuggingFace pipeline not initialized")
+            response = hf_pipeline(
+                prompt,
+                max_length=1400,
+                temperature=LLM_TEMPERATURE,
+                top_p=0.95,
+                do_sample=True,
+                num_return_sequences=1
+            )
+            if response and isinstance(response, list) and len(response) > 0:
+                generated_text = response[0].get("generated_text", "")
+                if generated_text:
+                    return generated_text[len(prompt):].strip()
+            raise RuntimeError("HuggingFace returned empty response")
+        
+        elif llm_backend == "azure":
             def _extract_text(resp: Any) -> tuple[str, Optional[str]]:
                 if not resp.choices:
                     return "", None
@@ -93,7 +127,7 @@ def generate_answer(prompt):
                 active_client.chat.completions.create,  # type: ignore
                 model=AZURE_OPENAI_DEPLOYMENT,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=1,
+                temperature=LLM_TEMPERATURE,
                 max_completion_tokens=1400,
                 retries=2,
                 timeout_seconds=25,
@@ -108,7 +142,7 @@ def generate_answer(prompt):
                     active_client.chat.completions.create,  # type: ignore
                     model=AZURE_OPENAI_DEPLOYMENT,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=1,
+                    temperature=LLM_TEMPERATURE,
                     max_completion_tokens=4000,
                     retries=1,
                     timeout_seconds=35,
@@ -210,7 +244,7 @@ def generate_answer_with_history(prompt: str, history: List[dict]) -> str:
             azure_client.chat.completions.create,
             model=AZURE_OPENAI_DEPLOYMENT,
             messages=messages,
-            temperature=1,
+            temperature=LLM_TEMPERATURE,
             max_completion_tokens=1400,
             retries=2,
             timeout_seconds=25,
@@ -243,7 +277,7 @@ def stream_answer(prompt: str, history: Optional[List[dict]] = None) -> Generato
         stream = azure_client.chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT,
             messages=messages,
-            temperature=1,
+            temperature=LLM_TEMPERATURE,
             max_completion_tokens=1400,
             stream=True,
         )
@@ -269,4 +303,3 @@ def stream_answer(prompt: str, history: Optional[List[dict]] = None) -> Generato
         return
 
     raise RuntimeError("No streaming-capable LLM backend available.")
-
