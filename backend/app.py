@@ -591,9 +591,9 @@ def get_all_quizzes():
     db = SessionLocal()
     try:
         quizzes_result = db.execute(sql_text("""
-            SELECT id, title, description, created_at
-            FROM quizzes2
-            ORDER BY created_at DESC
+            SELECT id, title, description, created_at, difficulty, duration_minutes
+FROM quizzes2
+ORDER BY created_at DESC
         """)).mappings().all()
 
         quizzes = []
