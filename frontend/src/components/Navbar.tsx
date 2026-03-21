@@ -47,7 +47,7 @@ export default function Navbar() {
             href="/citation-manager" 
             icon={<BookOpen size={18} />} 
             label="Citation Manager" 
-            active={pathname === "/citation-manager"} 
+            active={pathname === "/"} 
           />
 
           {/* Link to the Revision Quiz section */}
@@ -55,7 +55,7 @@ export default function Navbar() {
             href="/revision-quiz" 
             icon={<ClipboardCheck size={18} />} 
             label="Revision Quiz" 
-            active={pathname === "/revision-quiz"} 
+            active={pathname === "/quiz"} 
           />
 
           {/* Link to the user's main Dashboard */}
