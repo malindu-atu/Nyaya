@@ -3,7 +3,6 @@
 import React from 'react';
 import Sidebar from '@/components/Sidebar';
 import ChatWindow, { Message } from '@/components/ChatWindow';
-import { SearchMode } from '@/components/ModeToggle';
 import { askNyaya, ChatTurn, AskResponse } from '@/lib/api';
 
 export interface ChatSession {
@@ -115,7 +114,7 @@ export default function Home() {
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
   const handleNewChat = () => setActiveChatId(null);
 
-  const handleSendMessage = async (content: string, mode: SearchMode) => {
+  const handleSendMessage = async (content: string) => {
     const newUserMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -159,10 +158,8 @@ export default function Home() {
       const history = buildHistory(historyMessages);
       const userId = getUserId();
 
-      // Prefix with [graph-search] so the backend can route accordingly when graph mode is selected
-      const questionWithMode = mode === 'graph' ? `[graph-search] ${content}` : content;
 
-      const response = await askNyaya(questionWithMode, history, userId);
+      const response = await askNyaya(content, history, userId);
       const answerText = response.answer + formatSources(response);
 
       const systemMsg: Message = {
