@@ -44,7 +44,7 @@ export default function Navbar() {
           
           {/* Link to the Citation Management tool */}
           <NavLink 
-            href="/citation-manager" 
+            href="/" 
             icon={<BookOpen size={18} />} 
             label="Citation Manager" 
             active={pathname === "/"} 
