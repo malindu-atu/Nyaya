@@ -85,20 +85,7 @@ export default function QuizSystemPage() {
         setQuizCompleted(false);
     };
 
-    const Navbar = () => (
-        <div className="w-full absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 md:p-6">
-            <div className="flex items-center gap-2.5">
-                <img src="/nyayalogo.png" alt="Nyaya Logo" className="h-8 md:h-10 w-auto" />
-                <span className="font-serif font-bold text-navy-900 text-lg md:text-xl tracking-tight">NYAYA.LK</span>
-            </div>
-            <Link
-                href="/dashboard"
-                className="w-11 h-11 md:w-12 md:h-12 bg-navy-900 text-white rounded-full hover:bg-navy-800 transition shadow-sm flex items-center justify-center"
-            >
-                <User className="w-5 h-5 md:w-5 md:h-5 text-gold-500" />
-            </Link>
-        </div>
-    );
+    
 
     const Watermark = () => (
         <div className="absolute top-0 right-0 bottom-0 pointer-events-none z-0 opacity-[0.1] overflow-hidden flex justify-end items-end pb-12 pr-12 lg:pb-0 lg:pr-0 lg:items-center">
@@ -111,7 +98,6 @@ export default function QuizSystemPage() {
         return (
             <div className="min-h-screen bg-white p-6 md:p-12 pb-24 relative overflow-hidden font-sans">
                 <Watermark />
-                <Navbar />
 
                 <div className="max-w-6xl mx-auto relative z-10 pt-16 mt-8">
                     <div className="flex items-center justify-between mb-12">
@@ -157,7 +143,7 @@ export default function QuizSystemPage() {
     if (quizCompleted) {
         return (
             <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 pb-20 relative font-sans">
-                <Navbar />
+              
                 <div className="absolute top-24 md:top-28 left-8 z-10">
                     <button onClick={backToList} className="flex items-center text-sm font-medium text-navy-900/60 hover:text-navy-900 transition-colors">
                         <ArrowLeft className="w-4 h-4 mr-1" />
@@ -183,7 +169,7 @@ export default function QuizSystemPage() {
     return (
         <div className="min-h-screen bg-white flex flex-col p-6 md:p-12 pb-24 relative overflow-hidden font-sans">
             <Watermark />
-            <Navbar />
+       
 
             <div className="w-full max-w-4xl mx-auto flex-1 flex flex-col relative z-10 pt-16 mt-4">
                 <div className="flex items-center justify-between mb-8">
