@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import MessageBubble from './MessageBubble';
 import InputBar from './InputBar';
-import { SearchMode } from './ModeToggle';
 import { User } from 'lucide-react';
 import Link from 'next/link';
 
@@ -18,7 +17,7 @@ export interface Message {
 interface ChatWindowProps {
     messages: Message[];
     isTyping: boolean;
-    onSendMessage: (content: string, mode: SearchMode) => void;
+    onSendMessage: (content: string) => void;
 }
 
 export default function ChatWindow({ messages, isTyping, onSendMessage }: ChatWindowProps) {
@@ -31,8 +30,8 @@ export default function ChatWindow({ messages, isTyping, onSendMessage }: ChatWi
         }
     }, [messages, isTyping]);
 
-    const handleSend = (content: string, mode: SearchMode) => {
-        onSendMessage(content, mode);
+    const handleSend = (content: string) => {
+        onSendMessage(content);
     };
 
     return (
@@ -43,7 +42,7 @@ export default function ChatWindow({ messages, isTyping, onSendMessage }: ChatWi
             </div>
 
             {/* Navbar */}
-            <div className="w-full absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 md:p-6">
+            <div className="w-full absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 md:p-6 pl-14 md:pl-24">
                 <div className="flex items-center gap-2.5">
                     <img src="/nyayalogo.png" alt="Nyaya Logo" className="h-8 md:h-10 w-auto" />
                     <span className="font-serif font-bold text-navy-900 text-lg md:text-xl tracking-tight">NYAYA.LK</span>
@@ -57,7 +56,7 @@ export default function ChatWindow({ messages, isTyping, onSendMessage }: ChatWi
             </div>
 
             {/* Chat Content or Empty State */}
-            <div className="flex-1 overflow-y-auto z-10 custom-scrollbar relative">
+            <div className="flex-1 overflow-y-auto z-10 custom-scrollbar relative mt-18 md:mt-22 mb-24">
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full px-4">
                         <div className="text-center mb-6">
@@ -71,7 +70,7 @@ export default function ChatWindow({ messages, isTyping, onSendMessage }: ChatWi
                         </div>
                     </div>
                 ) : (
-                    <div className="p-4 md:p-8 pb-32">
+                    <div className="p-4 md:p-8 pt-24">
                         <div className="max-w-3xl mx-auto flex flex-col gap-6">
                             <AnimatePresence>
                                 {messages.map((msg) => (

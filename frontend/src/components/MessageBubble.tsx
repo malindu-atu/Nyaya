@@ -25,7 +25,7 @@ export default function MessageBubble({ role, content }: MessageBubbleProps) {
                 "max-w-[80%] rounded-xl p-4 shadow-sm mb-4",
                 isUser
                     ? "bg-white text-navy-900 self-end ml-auto rounded-br-none border border-grey-200"
-                    : "bg-transparent text-navy-800 self-start mr-auto pl-0"
+                    : "bg-transparent text-navy-800 self-start mr-auto pl-6"
             )}
         >
             {/* System might need a logo or icon next to it, but prompt check: "interface should function as a single clean chat experience" */}

@@ -89,13 +89,7 @@ export default function Sidebar({
                 </button>
 
                 {/* Theme Toggle */}
-                <button
-                    onClick={onToggleTheme}
-                    className="p-2 hover:bg-navy-800 rounded-lg transition-colors text-white/70 hover:text-white"
-                    title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
-                >
-                    {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-                </button>
+            
             </div>
 
             {/* Main Actions */}
