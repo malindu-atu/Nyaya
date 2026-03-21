@@ -13,6 +13,7 @@ AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-35-turbo")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+LLM_TEMPERATURE = float(os.getenv("NYAYA_LLM_TEMPERATURE", "0.35"))
 
 # Initialize the appropriate client
 llm_backend: Optional[str] = None
@@ -93,7 +94,7 @@ def generate_answer(prompt):
                 active_client.chat.completions.create,  # type: ignore
                 model=AZURE_OPENAI_DEPLOYMENT,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=1,
+                temperature=LLM_TEMPERATURE,
                 max_completion_tokens=1400,
                 retries=2,
                 timeout_seconds=25,
@@ -108,7 +109,7 @@ def generate_answer(prompt):
                     active_client.chat.completions.create,  # type: ignore
                     model=AZURE_OPENAI_DEPLOYMENT,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=1,
+                    temperature=LLM_TEMPERATURE,
                     max_completion_tokens=4000,
                     retries=1,
                     timeout_seconds=35,
@@ -210,7 +211,7 @@ def generate_answer_with_history(prompt: str, history: List[dict]) -> str:
             azure_client.chat.completions.create,
             model=AZURE_OPENAI_DEPLOYMENT,
             messages=messages,
-            temperature=1,
+            temperature=LLM_TEMPERATURE,
             max_completion_tokens=1400,
             retries=2,
             timeout_seconds=25,
@@ -243,7 +244,7 @@ def stream_answer(prompt: str, history: Optional[List[dict]] = None) -> Generato
         stream = azure_client.chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT,
             messages=messages,
-            temperature=1,
+            temperature=LLM_TEMPERATURE,
             max_completion_tokens=1400,
             stream=True,
         )
@@ -269,4 +270,3 @@ def stream_answer(prompt: str, history: Optional[List[dict]] = None) -> Generato
         return
 
     raise RuntimeError("No streaming-capable LLM backend available.")
-
