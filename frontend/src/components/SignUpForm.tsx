@@ -38,25 +38,27 @@ export default function SignUpForm() {
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
             <input 
-              name = "firstName"
+              name="firstName"
               value={formData.firstName}
               onChange={handleChange}
               type="text" 
               required
               placeholder="John" 
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#c5a059] outline-none text-black border-[#c5a059]" name="firstName" onChange={handleChange} />
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#c5a059] outline-none text-black border-[#c5a059]" 
+            />
           </div>
 
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Surname</label>
             <input 
-              name = "surname"
+              name="surname"
               value={formData.surname}
               onChange={handleChange}
               type="text" 
               required
               placeholder="Doe" 
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#c5a059] outline-none text-black border-[#c5a059]" name="surname" onChange={handleChange} />
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#c5a059] outline-none text-black border-[#c5a059]" 
+            />
           </div>
         </div>
 
