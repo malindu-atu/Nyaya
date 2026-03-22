@@ -585,182 +585,99 @@ def _quiz_db_unavailable():
 
 @app.get("/quizzes")
 def get_all_quizzes():
-    """Get all quizzes with their questions and options"""
+    """Get all quizzes with their questions and options — optimised (3 queries)"""
     if not DB_AVAILABLE:
         _quiz_db_unavailable()
     db = SessionLocal()
     try:
+        # Query 1: all quizzes
         quizzes_result = db.execute(sql_text("""
             SELECT id, title, description, created_at, difficulty, duration_minutes
-FROM quizzes2
-ORDER BY created_at DESC
+            FROM quizzes2
+            ORDER BY created_at DESC
         """)).mappings().all()
 
+        if not quizzes_result:
+            return []
+
+        quiz_ids = [str(q['id']) for q in quizzes_result]
+
+        # Query 2: all questions for all quizzes in one go
+        questions_result = db.execute(sql_text("""
+            SELECT id, quiz_id, question_text, explanation
+            FROM questions
+            WHERE quiz_id = ANY(:quiz_ids)
+        """), {"quiz_ids": quiz_ids}).mappings().all()
+
+        if not questions_result:
+            return [
+                {
+                    'id': str(q['id']),
+                    'title': q['title'],
+                    'description': q['description'],
+                    'created_at': str(q['created_at']),
+                    'difficulty': q.get('difficulty') or 'Medium',
+                    'duration_minutes': q.get('duration_minutes') or 10,
+                    'questions': [],
+                    'question_count': 0,
+                }
+                for q in quizzes_result
+            ]
+
+        question_ids = [str(q['id']) for q in questions_result]
+
+        # Query 3: all options for all questions in one go
+        options_result = db.execute(sql_text("""
+            SELECT question_id, option_text, is_correct
+            FROM options
+            WHERE question_id = ANY(:question_ids)
+            ORDER BY option_text
+        """), {"question_ids": question_ids}).mappings().all()
+
+        # Build options lookup: question_id -> list of options
+        options_by_question: Dict[str, List] = {}
+        for opt in options_result:
+            qid = str(opt['question_id'])
+            if qid not in options_by_question:
+                options_by_question[qid] = []
+            options_by_question[qid].append(dict(opt))
+
+        # Build questions lookup: quiz_id -> list of questions
+        questions_by_quiz: Dict[str, List] = {}
+        for q in questions_result:
+            qid = str(q['id'])
+            quiz_id = str(q['quiz_id'])
+            opts = options_by_question.get(qid, [])
+            q_dict = {
+                'id': qid,
+                'question_text': q['question_text'],
+                'explanation': q.get('explanation') or '',
+                'options': [o['option_text'] for o in opts],
+                'correct_option': next(
+                    (o['option_text'] for o in opts if o['is_correct']), None
+                ),
+            }
+            if quiz_id not in questions_by_quiz:
+                questions_by_quiz[quiz_id] = []
+            questions_by_quiz[quiz_id].append(q_dict)
+
+        # Assemble final response
         quizzes = []
         for quiz in quizzes_result:
-            quiz_dict = dict(quiz)
-            quiz_dict['id'] = str(quiz_dict['id'])
-
-            questions_result = db.execute(sql_text("""
-    SELECT id, question_text, explanation
-    FROM questions
-    WHERE quiz_id = :quiz_id
-"""), {"quiz_id": quiz['id']}).mappings().all()
-            
-            questions = []
-            for question in questions_result:
-                q_dict = dict(question)
-                q_dict['id'] = str(q_dict['id'])
-
-                options_result = db.execute(sql_text("""
-                    SELECT option_text, is_correct
-                    FROM options
-                    WHERE question_id = :question_id
-                    ORDER BY option_text
-                """), {"question_id": question['id']}).mappings().all()
-
-                q_dict['options'] = [opt['option_text'] for opt in options_result]
-                q_dict['correct_option'] = next(
-                    (opt['option_text'] for opt in options_result if opt['is_correct']),
-                    None
-                )
-                questions.append(q_dict)
-
-            quiz_dict['questions'] = questions
-            quiz_dict['question_count'] = len(questions)
-            quizzes.append(quiz_dict)
+            quiz_id = str(quiz['id'])
+            questions = questions_by_quiz.get(quiz_id, [])
+            quizzes.append({
+                'id': quiz_id,
+                'title': quiz['title'],
+                'description': quiz['description'],
+                'created_at': str(quiz['created_at']),
+                'difficulty': quiz.get('difficulty') or 'Medium',
+                'duration_minutes': quiz.get('duration_minutes') or 10,
+                'questions': questions,
+                'question_count': len(questions),
+            })
 
         return quizzes
-    finally:
-        db.close()
-
-
-@app.get("/quizzes/{quiz_id}")
-def get_quiz(quiz_id: str):
-    """Get a single quiz with all its questions and options"""
-    if not DB_AVAILABLE:
-        _quiz_db_unavailable()
-    db = SessionLocal()
-    try:
-        quiz_result = db.execute(sql_text("""
-            SELECT id, title, description, created_at
-            FROM quizzes2
-            WHERE id = :id
-        """), {"id": quiz_id}).mappings().first()
-
-        if not quiz_result:
-            raise HTTPException(status_code=404, detail="Quiz not found")
-
-        quiz = dict(quiz_result)
-        quiz['id'] = str(quiz['id'])
-
-        questions_result = db.execute(sql_text("""
-    SELECT id, question_text, explanation
-    FROM questions
-    WHERE quiz_id = :quiz_id
-"""), {"quiz_id": quiz_id}).mappings().all()
-
-        questions = []
-        for question in questions_result:
-            q_dict = dict(question)
-            q_dict['id'] = str(q_dict['id'])
-
-            options_result = db.execute(sql_text("""
-                SELECT option_text, is_correct
-                FROM options
-                WHERE question_id = :question_id
-                ORDER BY option_text
-            """), {"question_id": question['id']}).mappings().all()
-
-            q_dict['options'] = [opt['option_text'] for opt in options_result]
-            q_dict['correct_option'] = next(
-                (opt['option_text'] for opt in options_result if opt['is_correct']),
-                None
-            )
-            questions.append(q_dict)
-
-        quiz['questions'] = questions
-        return quiz
-    finally:
-        db.close()
-
-
-@app.post("/attempts/start")
-def start_attempt(attempt: QuizAttemptCreate):
-    """Start a new quiz attempt"""
-    if not DB_AVAILABLE:
-        _quiz_db_unavailable()
-    db = SessionLocal()
-    try:
-        attempt_id = str(uuid.uuid4())
-        db.execute(
-            sql_text("""
-                INSERT INTO quiz_attempts (id, user_id, quiz_id, score, created_at)
-                VALUES (:id, :user_id, :quiz_id, 0, NOW())
-            """),
-            {"id": attempt_id, "user_id": attempt.user_id, "quiz_id": attempt.quiz_id}
-        )
-        db.commit()
-        return {"attempt_id": attempt_id, "message": "Attempt started"}
-    finally:
-        db.close()
-
-
-@app.post("/attempts/complete")
-def complete_attempt(completion: QuizAttemptComplete):
-    """Complete a quiz attempt and record the score"""
-    if not DB_AVAILABLE:
-        _quiz_db_unavailable()
-    db = SessionLocal()
-    try:
-        db.execute(
-            sql_text("""
-                UPDATE quiz_attempts
-                SET score = :score
-                WHERE id = :attempt_id
-            """),
-            {"attempt_id": completion.attempt_id, "score": completion.score}
-        )
-        db.commit()
-        return {"message": "Attempt completed", "score": completion.score}
-    finally:
-        db.close()
-
-
-@app.get("/attempts/{user_id}")
-def get_user_attempts(user_id: str):
-    """Get all quiz attempts for a user"""
-    if not DB_AVAILABLE:
-        _quiz_db_unavailable()
-    db = SessionLocal()
-    try:
-        result = db.execute(
-            sql_text("""
-                SELECT qa.id, qa.quiz_id, qa.score, qa.created_at,
-                       q.title, q.description
-                FROM quiz_attempts qa
-                JOIN quizzes2 q ON qa.quiz_id = q.id
-                WHERE qa.user_id = :user_id
-                ORDER BY qa.created_at DESC
-            """),
-            {"user_id": user_id}
-        ).mappings().all()
-
-        attempts = []
-        for row in result:
-            attempt_dict = dict(row)
-            attempt_dict['id'] = str(attempt_dict['id'])
-            attempt_dict['quiz_id'] = str(attempt_dict['quiz_id'])
-
-            question_count = db.execute(
-                sql_text("SELECT COUNT(*) FROM questions WHERE quiz_id = :quiz_id"),
-                {"quiz_id": row['quiz_id']}
-            ).scalar()
-
-            attempt_dict['total_questions'] = question_count
-            attempts.append(attempt_dict)
-
-        return attempts
     finally:
         db.close()
 
