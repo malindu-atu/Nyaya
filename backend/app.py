@@ -602,11 +602,11 @@ ORDER BY created_at DESC
             quiz_dict['id'] = str(quiz_dict['id'])
 
             questions_result = db.execute(sql_text("""
-                SELECT id, question_text
-                FROM questions
-                WHERE quiz_id = :quiz_id
-            """), {"quiz_id": quiz['id']}).mappings().all()
-
+    SELECT id, question_text, explanation
+    FROM questions
+    WHERE quiz_id = :quiz_id
+"""), {"quiz_id": quiz['id']}).mappings().all()
+            
             questions = []
             for question in questions_result:
                 q_dict = dict(question)
@@ -655,10 +655,10 @@ def get_quiz(quiz_id: str):
         quiz['id'] = str(quiz['id'])
 
         questions_result = db.execute(sql_text("""
-            SELECT id, question_text
-            FROM questions
-            WHERE quiz_id = :quiz_id
-        """), {"quiz_id": quiz_id}).mappings().all()
+    SELECT id, question_text, explanation
+    FROM questions
+    WHERE quiz_id = :quiz_id
+"""), {"quiz_id": quiz_id}).mappings().all()
 
         questions = []
         for question in questions_result:
