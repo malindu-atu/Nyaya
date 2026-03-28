@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
@@ -19,29 +18,42 @@ export function useQuizDashboardLogic() {
     return `${mins}m ${secs}s`;
   };
 
-  useEffect(() => {
-    async function getDashboardData() {
-      // 1. Get current user
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const getDashboardData = useCallback(async () => {
+    // 1. Get current user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-      if (authError || !user) {
-        router.push("/login");
-        return;
-      }
-
-      // 2. Fetch Profile and Stats from your new tables
-      const [profileRes, statsRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("user_stats").select("*").eq("id", user.id).single()
-      ]);
-
-      setUserProfile(profileRes.data);
-      setUserStats(statsRes.data);
-      setLoading(false);
+    if (authError || !user) {
+      router.push("/login");
+      return;
     }
 
-    getDashboardData();
+    // 2. Fetch Profile and Stats in parallel
+    const [profileRes, statsRes] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", user.id).single(),
+      supabase.from("user_stats").select("*").eq("id", user.id).single(),
+    ]);
+
+    setUserProfile(profileRes.data);
+    setUserStats(statsRes.data);
+    setLoading(false);
   }, [router]);
+
+  // Initial load
+  useEffect(() => {
+    getDashboardData();
+  }, [getDashboardData]);
+
+  // Re-fetch whenever the tab regains focus (e.g. user returns from /quiz)
+  useEffect(() => {
+    const handleFocus = () => {
+      getDashboardData();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [getDashboardData]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -54,7 +66,7 @@ export function useQuizDashboardLogic() {
     loading,
     formatTime,
     handleLogout,
-    router
+    router,
+    refreshStats: getDashboardData,
   };
 }
-
