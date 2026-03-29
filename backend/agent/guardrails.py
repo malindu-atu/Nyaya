@@ -1,20 +1,11 @@
-"""
-Guardrails for Nyaya Legal Assistant
-Ensures responses are accurate, grounded, and safe
-"""
+
 
 import re
 from typing import Dict, List, Tuple
 
 
 class LegalGuardrails:
-    """
-    Guardrails to ensure legal assistant responses are:
-    1. Grounded in retrieved documents (no hallucination)
-    2. Properly cited
-    3. Safe (no harmful advice)
-    4. Professional tone
-    """
+   
     
     def __init__(self):
         self.forbidden_patterns = [
@@ -43,7 +34,7 @@ class LegalGuardrails:
         # 1. Check for forbidden patterns (legal liability)
         for pattern in self.forbidden_patterns:
             if re.search(pattern, response, re.IGNORECASE):
-                warnings.append(f"⚠️ Removed overly confident legal advice: {pattern}")
+                warnings.append(f"Removed overly confident legal advice: {pattern}")
                 modified = re.sub(pattern, "[removed - see lawyer]", modified, flags=re.IGNORECASE)
         
         # 2. Verify citations are grounded
@@ -54,11 +45,11 @@ class LegalGuardrails:
         if citations_in_response:
             grounded_citations = self._verify_citations_grounded(citations_in_response, context_chunks)
             if len(grounded_citations) < len(citations_in_response) * 0.5:
-                warnings.append("⚠️ Less than 50% of citations appear in retrieved documents")
+                warnings.append("Less than 50% of citations appear in retrieved documents")
         
         # 3. Length check (prevent overlong answers)
         if len(modified.split()) > 500:
-            warnings.append("⚠️ Response too long (>500 words), truncating")
+            warnings.append("Response too long (>500 words), truncating")
             sentences = modified.split('. ')
             modified = '. '.join(sentences[:15]) + '.'  # Keep first 15 sentences
         
@@ -66,9 +57,9 @@ class LegalGuardrails:
         informal_words = ['gonna', 'wanna', 'yeah', 'nope', 'yep']
         for word in informal_words:
             if re.search(rf'\b{word}\b', modified, re.IGNORECASE):
-                warnings.append(f"⚠️ Informal language detected: {word}")
+                warnings.append(f"Informal language detected: {word}")
         
-        is_valid = len(warnings) == 0 or all('⚠️' in w for w in warnings)
+        is_valid = len(warnings) == 0 or all('' in w for w in warnings)
         
         return is_valid, modified, warnings
     
@@ -87,13 +78,13 @@ class LegalGuardrails:
     
     def add_disclaimer(self, response: str) -> str:
         """Add legal disclaimer to response"""
-        if "**⚖️ Legal Disclaimer:**" in response:
+        if "**Legal Disclaimer:**" in response:
             return response
 
         disclaimer = """
 
 ---
-**⚖️ Legal Disclaimer:**
+**Legal Disclaimer:**
 This information is for educational purposes only and does not constitute legal advice. 
 Sri Lankan law is complex—consult a qualified attorney for your specific situation.
 """

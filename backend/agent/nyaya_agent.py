@@ -75,20 +75,25 @@ class NyayaAgent:
             raise
 
     def _build_retrieval_fallback_answer(self, query, clean_chunks):
+        """
+        Structured fallback used when the LLM is unavailable.
+        Produces the same Answer / Summary / Key Points / Citations format
+        as the LLM-generated response, populated directly from retrieved chunks.
+        """
         if not clean_chunks:
             return "Sorry, I couldn't find enough relevant information for that question in the current database."
 
-        # Confidence gate: avoid hallucination/noisy dump
+        # Confidence gate
         first_cleaned, first_chunk = clean_chunks[0]
         first_dict = first_chunk if isinstance(first_chunk, dict) else {"text": first_cleaned}
         best_score = score_result_relevance(first_dict, query)
-
         query_terms = extract_query_terms(query)
         matched_query_terms = sum(1 for term in query_terms if term in first_cleaned.lower())
 
         if best_score < 0.10 or (len(query_terms) >= 3 and matched_query_terms == 0):
             return "Sorry, I couldn't find reliable information for that question in the current database."
 
+        # Deduplicate chunks
         seen = set()
         unique = []
         for cleaned, chunk in clean_chunks:
@@ -97,40 +102,70 @@ class NyayaAgent:
                 continue
             seen.add(snippet_key)
             unique.append((cleaned, chunk))
-            if len(unique) >= 2:
+            if len(unique) >= 5:
                 break
 
         if not unique:
             return "Sorry, I couldn't find enough relevant information for that question in the current database."
 
-        best_text, best_chunk = unique[0]
-        best_excerpt = best_text[:420].strip()
+        # Collect citation references (e.g. "SC/APPEAL/169/2019" style from pdf_name)
+        def _pdf_to_ref(pdf_name: str) -> str:
+            """Convert pdf filename to a readable citation reference."""
+            if not pdf_name:
+                return "Unknown"
+            # Strip extension
+            ref = pdf_name.replace(".pdf", "").replace(".PDF", "")
+            # Convert underscores to slashes for SC case references (sc_appeal_169_2019 -> SC/APPEAL/169/2019)
+            parts = ref.split("_")
+            if parts and parts[0].lower() in {"sc", "hc", "ca", "dc"}:
+                return "/".join(p.upper() for p in parts)
+            return ref.upper()
 
-        lines = [
-            "### Direct Answer",
-            best_excerpt,
-            "",
-            "### Evidence from Retrieved Text",
-            f"- {best_excerpt[:300]}",
-            "",
-            "### Sources",
-        ]
+        citations = []
+        seen_refs = set()
+        key_points = []
 
-        for i, (_, chunk) in enumerate(unique, 1):
+        for cleaned, chunk in unique:
             if not isinstance(chunk, dict):
                 continue
             pdf = chunk.get("pdf_name") or "Unknown"
             page = chunk.get("page") if chunk.get("page") is not None else "?"
-            lines.append(f"{i}. {pdf}, page {page}")
+            ref = _pdf_to_ref(pdf)
 
-        lines.append("")
-        error_text = (self.last_llm_error or "").lower()
-        if any(marker in error_text for marker in ["resource_exhausted", "quota", "429", "api"]):
-            lines.append("### Note")
-            lines.append("This response is retrieval-only because the AI backend is currently unavailable.")
-        else:
-            lines.append("### Note")
-            lines.append("This response is retrieval-only because the LLM is currently unavailable.")
+            excerpt = cleaned[:350].strip()
+            # Build a key point: short excerpt + citation
+            key_points.append(f"* {excerpt} ({ref})")
+
+            if ref not in seen_refs:
+                seen_refs.add(ref)
+                citations.append(f"* {ref}, Page {page}")
+
+        # Build the answer block — use first chunk as the primary answer sentence
+        primary_text = unique[0][0][:300].strip()
+        primary_ref = _pdf_to_ref(
+            unique[0][1].get("pdf_name", "") if isinstance(unique[0][1], dict) else ""
+        )
+
+        lines = [
+            f"**Answer:** {primary_text}",
+            "",
+            "**Key Points:**",
+        ]
+        lines.extend(key_points[:4])
+        lines += [
+            "",
+            "**Citations:**",
+        ]
+        lines.extend(citations)
+
+        # Note about LLM unavailability
+        lines += [
+            "",
+            "---",
+            "*The AI synthesis layer is currently unavailable — this answer is assembled directly from retrieved source chunks. "
+            "Configure `AZURE_OPENAI_API_KEY` or `GEMINI_API_KEY` in your `.env` for full synthesised answers.*",
+        ]
+
         return "\n".join(lines)
 
     def _build_case_source_block(self, case_name, top_k=2):
@@ -333,7 +368,7 @@ class NyayaAgent:
 
         try:
             start = time.time()
-            context_chunks = self.retriever.search(retrieval_query, top_k=3, return_metadata=True)
+            context_chunks = self.retriever.search(retrieval_query, top_k=6, return_metadata=True)
             if self.show_debug:
                 print("Retrieval time:", time.time() - start)
             log_step(f"retrieve: got {len(context_chunks)} chunks")
@@ -397,8 +432,8 @@ class NyayaAgent:
         
         # Limit total context to avoid overwhelming the model
         context_blocks = []
-        for cleaned, chunk in clean_chunks[:2]:
-            cleaned_excerpt = cleaned[:1200]
+        for cleaned, chunk in clean_chunks[:5]:
+            cleaned_excerpt = cleaned[:2000]
             if isinstance(chunk, dict):
                 pdf = chunk.get("pdf_name") or "Unknown"
                 page = chunk.get("page") or "Unknown"
@@ -416,49 +451,73 @@ class NyayaAgent:
         context_text = "\n\n".join(context_blocks)
         self.last_llm_error = None
         
-        # Build prompt for LLM - conversational ChatGPT-style
+        # Build prompt for LLM
+        # Build clean citation reference list from chunks
+        citation_refs = []
+        seen_refs = set()
+        for _, chunk in clean_chunks[:5]:
+            if isinstance(chunk, dict):
+                pdf = chunk.get("pdf_name", "Unknown").replace(".pdf", "").replace("_", "/").upper()
+                page = chunk.get("page", "?")
+                ref = f"{pdf}, p.{page}"
+                if ref not in seen_refs:
+                    seen_refs.add(ref)
+                    citation_refs.append(ref)
+
+        citations_available = "\n".join(f"- {r}" for r in citation_refs)
+
         prompt = f"""{SYSTEM_PROMPT}
 
-You are answering a Sri Lankan legal question. Follow this EXACT structure:
+Answer the Sri Lankan legal question below using ONLY the retrieved documents.
+Be concise. No repetition. Every sentence must add new information.
 
-### Direct Answer
-Provide a clear, direct answer in 2–3 sentences. Be specific.
+Use this EXACT format — no deviations, no extra sections:
 
-### Legal Basis
-- Cite the governing principle from the retrieved material.
-- If the material is narrow or non-exhaustive, explicitly say so.
-- Only cite information present in the documents below.
-
-### Practical Takeaway
-One sentence summarizing the key practical implication.
+Answer: [1-2 sentences. State the core legal rule directly.]
+Summary:
+* [Concept 1 label]: [Max 1 line. Do not repeat the Answer.]
+* [Concept 2 label]: [Max 1 line. Do not repeat the Answer.]
+Key points:
+* [Specific legal point from retrieved text, max 15 words. End with (CASE/REF).]
+* [Another specific point, max 15 words. End with (CASE/REF).]
+* [Third point only if genuinely different from the above two.]
+Practical result:
+* Civil: [One concrete outcome for a civil litigant.]
+* Criminal: [One concrete outcome for a criminal accused.]
+Citations
+* [CASE/REF only — no page numbers, no filenames]
 
 ---
 
-**Retrieved Legal Context:**
+Retrieved Legal Context:
 {context_text}
 
-**Citation Graph Context:**
-{chr(10).join(graph_context_lines) if graph_context_lines else 'No explicit graph context available.'}
+Citation Graph Context:
+{chr(10).join(graph_context_lines) if graph_context_lines else 'No graph context available.'}
 
-**User Question:** {query}
+Available source references:
+{citations_available}
+
+Question: {query}
 
 ---
 
-**CRITICAL RULES:**
-- Use ONLY information from the retrieved documents.
-- Do NOT invent enumerated lists if documents don't provide one.
-- Keep citations precise (PDF name, page number only).
-- Total length must be under 170 words.
-- If unsure, say "The retrieved material does not provide sufficient detail on this."
+STRICT RULES:
+- Every bullet must be under 20 words.
+- Never repeat the same fact twice anywhere in the response.
+- Never use the phrase "beyond reasonable doubt" more than once.
+- Never use the phrase "balance of probabilities" more than once.
+- Citations section: case references only, no filenames, no page numbers.
+- No inline source tags. No disclaimers. No extra headers. No emoji.
 
-**Now provide your structured answer:**"""
+Now write the answer:"""
         
         try:
             if history:
                 answer = generate_answer_with_history(prompt, history)
             else:
                 answer = self._generate_with_llm(prompt)
-            
+
             # 🛡️ GUARDRAIL 2: Validate response with guardrails
             is_valid, validated_answer, warnings = self.guardrails.check_response(
                 answer, 
@@ -483,6 +542,18 @@ One sentence summarizing the key practical implication.
                 f"{reflection_report.get('removed_sentences', 0)} unsupported sentence(s)"
             )
             
+            # Strip inline (Source: ...) tags injected by the LLM
+            import re as _re
+            answer = _re.sub(r"\s*\(Source:[^)]*\)", "", answer).strip()
+            # Strip everything from the first spurious marker onward
+            # Use a single regex to catch all variants in one pass
+            cutoff = _re.search(
+                r"(\s---|\n---|\*\*Sources|Sources:\*\*|\[1\]\s*sc_)",
+                answer
+            )
+            if cutoff:
+                answer = answer[:cutoff.start()].rstrip()
+
             # 🛡️ GUARDRAIL 3: Citation validation
             citations = self.citation_validator.extract_citations(answer)
             if citations:
@@ -497,36 +568,16 @@ One sentence summarizing the key practical implication.
                 
                 # Warn if low groundedness
                 if groundedness < 0.7 and len(citations) > 0:
-                    answer += "\n\n⚠️ *Some citations may not be directly from the retrieved documents.*"
+                    answer += "\n\n*Some citations may not be directly from the retrieved documents.*"
             else:
                 groundedness = reflection_report.get("groundedness_score", 0.0)
             
-            # Append manual citations if not already present
-            if isinstance(clean_chunks[0][1], dict) and "(Source:" not in answer and "Page " not in answer:
-                answer += "\n\n**📚 Sources:**\n"
-                seen_sources = set()
-                source_index = 1
-                for _, chunk in clean_chunks[:3]:
-                    if isinstance(chunk, dict):
-                        pdf = chunk.get("pdf_name", "Unknown")
-                        page = chunk.get("page", "?")
-                        source_key = f"{pdf}|{page}"
-                        if source_key in seen_sources:
-                            continue
-                        seen_sources.add(source_key)
-                        answer += f"{source_index}. {pdf}, Page {page}\n"
-                        source_index += 1
-                        if source_index > 2:
-                            break
-            
-            # 🛡️ GUARDRAIL 4: Add legal disclaimer
+            # 🛡️ GUARDRAIL 4: Temporal warning only (no duplicate sources, no disclaimer)
             if temporal_warnings:
                 answer = (
-                    "⚠️ High-priority temporal warning: one or more cited precedents may be "
-                    "overruled, overturned, or amended in the case graph.\n\n" + answer
+                    "**Temporal warning:** one or more cited precedents may be "
+                    "overruled or amended — verify before relying on them.\n\n" + answer
                 )
-            if _is_truthy_env("NYAYA_APPEND_DISCLAIMER", "1"):
-                answer = self.guardrails.add_disclaimer(answer)
 
             chunks_dict = [chunk for _, chunk in clean_chunks if isinstance(chunk, dict)]
             source_map = self._build_source_map(answer, chunks_dict)
@@ -559,7 +610,7 @@ One sentence summarizing the key practical implication.
             
             # Show helpful error if LLM not configured
             if "No LLM configured" in error_msg:
-                fallback = """⚠️ **LLM Not Configured**
+                fallback = """**LLM Not Configured**
 
 I can retrieve relevant documents, but I need an AI model (Azure OpenAI or Gemini) to generate natural answers.
 

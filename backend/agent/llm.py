@@ -1,271 +1,307 @@
-# agent/llm.py
 
 import os
-from typing import Any, Generator, List, Optional
+from typing import Generator, List, Optional
 from dotenv import load_dotenv
 from resilience import CircuitBreaker, call_with_retry
 
 load_dotenv()
 
-# Try Azure OpenAI first, fallback to Gemini
-AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
-AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-35-turbo")
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+# ── Groq ──────────────────────────────────────────────────────────────────────
+GROQ_API_KEY  = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL    = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+# ── Anthropic ─────────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL   = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+
+# ── Gemini ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-# Initialize the appropriate client
+# ── Azure OpenAI ──────────────────────────────────────────────────────────────
+AZURE_OPENAI_API_KEY     = os.getenv("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_ENDPOINT    = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_DEPLOYMENT  = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+
+# ── Runtime state ─────────────────────────────────────────────────────────────
 llm_backend: Optional[str] = None
-client: Any = None
-azure_client: Any = None
-gemini_client: Any = None
-azure_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
-gemini_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
+groq_client      = None
+anthropic_client = None
+gemini_client    = None
+azure_client     = None
 
-if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
+groq_breaker      = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
+anthropic_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
+gemini_breaker    = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
+azure_breaker     = CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
+
+SYSTEM = "You are Nyaya, a Senior Sri Lankan legal researcher."
+
+# ── 1. Try Groq ───────────────────────────────────────────────────────────────
+if GROQ_API_KEY:
+    try:
+        from openai import OpenAI
+        groq_client = OpenAI(
+            api_key=GROQ_API_KEY,
+            base_url="https://api.groq.com/openai/v1",
+        )
+        llm_backend = "groq"
+        print(f"[LLM] Using Groq ({GROQ_MODEL})")
+    except Exception as e:
+        print(f"[LLM] Groq init failed: {e}")
+
+# ── 2. Try Anthropic ──────────────────────────────────────────────────────────
+if not llm_backend and ANTHROPIC_API_KEY:
+    try:
+        import anthropic
+        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        llm_backend = "anthropic"
+        print(f"[LLM] Using Anthropic Claude ({ANTHROPIC_MODEL})")
+    except Exception as e:
+        print(f"[LLM] Anthropic init failed: {e}")
+
+# ── 3. Try Gemini ─────────────────────────────────────────────────────────────
+if not llm_backend and GEMINI_API_KEY:
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_client = genai.GenerativeModel(GEMINI_MODEL)
+        llm_backend = "gemini"
+        print(f"[LLM] Using Gemini ({GEMINI_MODEL})")
+    except Exception as e:
+        print(f"[LLM] Gemini init failed: {e}")
+
+# ── 4. Try Azure OpenAI ───────────────────────────────────────────────────────
+if not llm_backend and AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
     try:
         from openai import AzureOpenAI
         azure_client = AzureOpenAI(
             api_key=AZURE_OPENAI_API_KEY,
             azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_version=AZURE_OPENAI_API_VERSION
+            api_version=AZURE_OPENAI_API_VERSION,
         )
-        client = azure_client
         llm_backend = "azure"
-        print("[LLM] Using Azure OpenAI")
+        print(f"[LLM] Using Azure OpenAI ({AZURE_OPENAI_DEPLOYMENT})")
     except Exception as e:
         print(f"[LLM] Azure OpenAI init failed: {e}")
 
-if not llm_backend and GEMINI_API_KEY:
-    try:
-        import google.generativeai as genai  # type: ignore
-        genai.configure(api_key=GEMINI_API_KEY)  # type: ignore
-        gemini_client = genai.GenerativeModel('gemini-2.0-flash-exp')  # type: ignore
-        client = gemini_client
-        llm_backend = "gemini"
-        print("[LLM] Using Gemini (free)")
-    except Exception as e:
-        print(f"[LLM] Gemini init failed: {e}")
-
 if not llm_backend:
-    print("[WARNING] No LLM configured! Set AZURE_OPENAI_API_KEY or GEMINI_API_KEY in .env")
-    print("Get free Gemini key: https://makersuite.google.com/app/apikey")
+    print("[WARNING] No LLM configured!")
+    print("  Add one of these to your .env:")
+    print("    GROQ_API_KEY=gsk_...       (free, recommended)")
+    print("    ANTHROPIC_API_KEY=sk-ant-...")
+    print("    GEMINI_API_KEY=AIza...")
 
 
-def generate_answer(prompt):
-    """Generate natural language answer using configured LLM"""
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _require_backend():
     if not llm_backend:
-        raise RuntimeError(
-            "No LLM configured. Set AZURE_OPENAI_API_KEY or GEMINI_API_KEY in .env\n"
-            "Get free Gemini key: https://makersuite.google.com/app/apikey"
-        )
-    
-    try:
-        if llm_backend == "azure":
-            def _extract_text(resp: Any) -> tuple[str, Optional[str]]:
-                if not resp.choices:
-                    return "", None
-                choice = resp.choices[0]
-                finish_reason = getattr(choice, "finish_reason", None)
-                message_content = choice.message.content
-
-                if isinstance(message_content, str) and message_content.strip():
-                    return message_content.strip(), finish_reason
-
-                if isinstance(message_content, list):
-                    text_parts = []
-                    for part in message_content:
-                        if isinstance(part, dict):
-                            text = part.get("text")
-                            if isinstance(text, str) and text.strip():
-                                text_parts.append(text.strip())
-                        else:
-                            text = getattr(part, "text", None)
-                            if isinstance(text, str) and text.strip():
-                                text_parts.append(text.strip())
-                    if text_parts:
-                        return "\n".join(text_parts), finish_reason
-
-                return "", finish_reason
-
-            active_client = azure_client or client
-            response = call_with_retry(
-                active_client.chat.completions.create,  # type: ignore
-                model=AZURE_OPENAI_DEPLOYMENT,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=1,
-                max_completion_tokens=1400,
-                retries=2,
-                timeout_seconds=25,
-                circuit_breaker=azure_breaker,
-            )
-            extracted_text, finish_reason = _extract_text(response)
-            if extracted_text:
-                return extracted_text
-
-            if finish_reason == "length":
-                retry_response = call_with_retry(
-                    active_client.chat.completions.create,  # type: ignore
-                    model=AZURE_OPENAI_DEPLOYMENT,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=1,
-                    max_completion_tokens=4000,
-                    retries=1,
-                    timeout_seconds=35,
-                    circuit_breaker=azure_breaker,
-                )
-                retry_text, _ = _extract_text(retry_response)
-                if retry_text:
-                    return retry_text
-
-            # Fallback for models that can return empty content in chat completions
-            # while still being able to produce text via Responses API.
-            try:
-                fallback = call_with_retry(
-                    active_client.responses.create,  # type: ignore
-                    model=AZURE_OPENAI_DEPLOYMENT,
-                    input=prompt,
-                    max_output_tokens=800,
-                    retries=1,
-                    timeout_seconds=25,
-                    circuit_breaker=azure_breaker,
-                )
-                output_text = getattr(fallback, "output_text", None)
-                if isinstance(output_text, str) and output_text.strip():
-                    return output_text.strip()
-            except Exception:
-                # Azure path failed; attempt Gemini fallback if available.
-                if gemini_client:
-                    gemini_response = call_with_retry(
-                        gemini_client.generate_content,  # type: ignore
-                        prompt,
-                        retries=1,
-                        timeout_seconds=25,
-                        circuit_breaker=gemini_breaker,
-                    )
-                    text = getattr(gemini_response, "text", None)
-                    if isinstance(text, str) and text.strip():
-                        return text.strip()
-
-            raise RuntimeError("Azure returned an empty response")
-        
-        elif llm_backend == "gemini":
-            active_client = gemini_client or client
-            response = call_with_retry(
-                active_client.generate_content,  # type: ignore
-                prompt,
-                retries=2,
-                timeout_seconds=25,
-                circuit_breaker=gemini_breaker,
-            )
-            return response.text
-    
-    except Exception as e:
-        raise RuntimeError(f"LLM generation failed ({llm_backend}): {str(e)}")
+        raise RuntimeError("No LLM configured. Add GROQ_API_KEY to your .env file.")
 
 
-def generate_answer_with_history(prompt: str, history: List[dict]) -> str:
-    """
-    Generate an answer using the LLM with prior conversation turns.
+def _call_groq(messages: list, max_tokens: int = 2000) -> str:
+    response = call_with_retry(
+        groq_client.chat.completions.create,
+        model=GROQ_MODEL,
+        messages=messages,
+        temperature=0.1,
+        max_tokens=max_tokens,
+        retries=2,
+        timeout_seconds=40,
+        circuit_breaker=groq_breaker,
+    )
+    if not response.choices:
+        raise RuntimeError("Groq returned no choices")
+    return response.choices[0].message.content.strip()
 
-    history: list of {"role": "user"|"assistant", "content": str}
-    The prompt is appended as the final user message.
-    Falls back to generate_answer() for Gemini (no history support yet).
-    """
-    if not llm_backend:
-        raise RuntimeError("No LLM configured.")
 
-    if llm_backend != "azure" or not azure_client:
-        # Gemini path: flatten history into the prompt
-        history_text = ""
-        for turn in history[-6:]:  # last 3 pairs
-            role = "User" if turn.get("role") == "user" else "Assistant"
-            history_text += f"{role}: {turn.get('content', '')}\n"
-        combined = f"{history_text}User: {prompt}" if history_text else prompt
-        result = generate_answer(combined)
-        return result if isinstance(result, str) else str(result)
+def _call_anthropic(prompt: str, system: str = "", max_tokens: int = 2000) -> str:
+    kwargs = dict(
+        model=ANTHROPIC_MODEL,
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.1,
+    )
+    if system:
+        kwargs["system"] = system
+    response = call_with_retry(
+        anthropic_client.messages.create,
+        retries=2, timeout_seconds=40,
+        circuit_breaker=anthropic_breaker,
+        **kwargs,
+    )
+    return "".join(b.text for b in response.content if hasattr(b, "text")).strip()
 
-    def _extract_text(resp: Any) -> str:
-        if not resp.choices:
-            return ""
-        content = resp.choices[0].message.content
-        if isinstance(content, str):
-            return content.strip()
-        if isinstance(content, list):
-            return "\n".join(
-                p.get("text", "") if isinstance(p, dict) else getattr(p, "text", "")
-                for p in content
-            ).strip()
-        return ""
 
-    # Build messages: system + trimmed history (last 6 turns) + current prompt
-    messages: List[dict] = [{"role": "system", "content": "You are Nyaya, a Senior Sri Lankan legal researcher."}]
+def _call_anthropic_with_history(prompt: str, history: List[dict], system: str = "", max_tokens: int = 2000) -> str:
+    messages = []
     for turn in history[-6:]:
         if turn.get("role") in ("user", "assistant") and turn.get("content"):
             messages.append({"role": turn["role"], "content": turn["content"]})
     messages.append({"role": "user", "content": prompt})
+    kwargs = dict(model=ANTHROPIC_MODEL, max_tokens=max_tokens, messages=messages, temperature=0.1)
+    if system:
+        kwargs["system"] = system
+    response = call_with_retry(
+        anthropic_client.messages.create,
+        retries=2, timeout_seconds=40,
+        circuit_breaker=anthropic_breaker,
+        **kwargs,
+    )
+    return "".join(b.text for b in response.content if hasattr(b, "text")).strip()
 
+
+def _call_gemini(prompt: str) -> str:
+    response = call_with_retry(
+        gemini_client.generate_content, prompt,
+        retries=2, timeout_seconds=30,
+        circuit_breaker=gemini_breaker,
+    )
+    return response.text.strip()
+
+
+def _call_azure(messages: list, max_tokens: int = 2000) -> str:
+    response = call_with_retry(
+        azure_client.chat.completions.create,
+        model=AZURE_OPENAI_DEPLOYMENT,
+        messages=messages,
+        temperature=0.1,
+        max_completion_tokens=max_tokens,
+        retries=2, timeout_seconds=30,
+        circuit_breaker=azure_breaker,
+    )
+    if not response.choices:
+        raise RuntimeError("Azure returned no choices")
+    content = response.choices[0].message.content
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        return "\n".join(
+            p.get("text", "") if isinstance(p, dict) else getattr(p, "text", "")
+            for p in content
+        ).strip()
+    raise RuntimeError("Azure returned empty content")
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def generate_answer(prompt: str) -> str:
+    _require_backend()
     try:
-        response = call_with_retry(
-            azure_client.chat.completions.create,
-            model=AZURE_OPENAI_DEPLOYMENT,
-            messages=messages,
-            temperature=1,
-            max_completion_tokens=1400,
-            retries=2,
-            timeout_seconds=25,
-            circuit_breaker=azure_breaker,
-        )
-        text = _extract_text(response)
-        if text:
-            return text
-        raise RuntimeError("Azure returned empty response in history mode")
+        if llm_backend == "groq":
+            return _call_groq([
+                {"role": "system", "content": SYSTEM},
+                {"role": "user",   "content": prompt},
+            ])
+        if llm_backend == "anthropic":
+            return _call_anthropic(prompt, system=SYSTEM)
+        if llm_backend == "gemini":
+            return _call_gemini(f"{SYSTEM}\n\n{prompt}")
+        if llm_backend == "azure":
+            return _call_azure([
+                {"role": "system", "content": SYSTEM},
+                {"role": "user",   "content": prompt},
+            ])
     except Exception as e:
-        raise RuntimeError(f"LLM history generation failed: {e}") from e
+        raise RuntimeError(f"LLM generation failed ({llm_backend}): {e}") from e
+    raise RuntimeError("No active LLM backend")
+
+
+def generate_answer_with_history(prompt: str, history: List[dict]) -> str:
+    _require_backend()
+    try:
+        if llm_backend == "groq":
+            messages = [{"role": "system", "content": SYSTEM}]
+            for turn in history[-6:]:
+                if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                    messages.append({"role": turn["role"], "content": turn["content"]})
+            messages.append({"role": "user", "content": prompt})
+            return _call_groq(messages)
+        if llm_backend == "anthropic":
+            return _call_anthropic_with_history(prompt, history, system=SYSTEM)
+        if llm_backend == "gemini":
+            history_text = ""
+            for turn in history[-6:]:
+                role = "User" if turn.get("role") == "user" else "Assistant"
+                history_text += f"{role}: {turn.get('content', '')}\n"
+            combined = f"{SYSTEM}\n\n{history_text}User: {prompt}" if history_text else f"{SYSTEM}\n\n{prompt}"
+            return _call_gemini(combined)
+        if llm_backend == "azure":
+            messages = [{"role": "system", "content": SYSTEM}]
+            for turn in history[-6:]:
+                if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                    messages.append({"role": turn["role"], "content": turn["content"]})
+            messages.append({"role": "user", "content": prompt})
+            return _call_azure(messages)
+    except Exception as e:
+        raise RuntimeError(f"LLM history generation failed ({llm_backend}): {e}") from e
+    raise RuntimeError("No active LLM backend")
 
 
 def stream_answer(prompt: str, history: Optional[List[dict]] = None) -> Generator[str, None, None]:
-    """
-    Stream answer tokens from Azure OpenAI (or Gemini if Azure unavailable).
-    Yields string chunks as they arrive.
-    history: optional list of {"role": ..., "content": ...} prior turns.
-    """
-    if not llm_backend:
-        raise RuntimeError("No LLM configured.")
+    _require_backend()
 
-    if llm_backend == "azure" and azure_client:
-        messages: List[dict] = [{"role": "system", "content": "You are Nyaya, a Senior Sri Lankan legal researcher."}]
+    if llm_backend == "groq":
+        messages = [{"role": "system", "content": SYSTEM}]
         for turn in (history or [])[-6:]:
             if turn.get("role") in ("user", "assistant") and turn.get("content"):
                 messages.append({"role": turn["role"], "content": turn["content"]})
         messages.append({"role": "user", "content": prompt})
-
-        stream = azure_client.chat.completions.create(
-            model=AZURE_OPENAI_DEPLOYMENT,
-            messages=messages,
-            temperature=1,
-            max_completion_tokens=1400,
-            stream=True,
+        stream = groq_client.chat.completions.create(
+            model=GROQ_MODEL, messages=messages,
+            temperature=0.1, max_tokens=2000, stream=True,
         )
         for chunk in stream:
             if chunk.choices:
-                delta = chunk.choices[0].delta
-                content = getattr(delta, "content", None)
+                content = getattr(chunk.choices[0].delta, "content", None)
                 if content:
                     yield content
         return
 
-    if llm_backend == "gemini" and gemini_client:
+    if llm_backend == "anthropic":
+        messages = []
+        for turn in (history or [])[-6:]:
+            if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                messages.append({"role": turn["role"], "content": turn["content"]})
+        messages.append({"role": "user", "content": prompt})
+        with anthropic_client.messages.stream(
+            model=ANTHROPIC_MODEL, max_tokens=2000,
+            system=SYSTEM, messages=messages, temperature=0.1,
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+        return
+
+    if llm_backend == "gemini":
         history_text = ""
         for turn in (history or [])[-6:]:
             role = "User" if turn.get("role") == "user" else "Assistant"
             history_text += f"{role}: {turn.get('content', '')}\n"
-        combined = f"{history_text}User: {prompt}" if history_text else prompt
+        combined = f"{SYSTEM}\n\n{history_text}User: {prompt}" if history_text else f"{SYSTEM}\n\n{prompt}"
         response = gemini_client.generate_content(combined, stream=True)
         for chunk in response:
             text = getattr(chunk, "text", None)
             if text:
                 yield text
+        return
+
+    if llm_backend == "azure":
+        messages = [{"role": "system", "content": SYSTEM}]
+        for turn in (history or [])[-6:]:
+            if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                messages.append({"role": turn["role"], "content": turn["content"]})
+        messages.append({"role": "user", "content": prompt})
+        stream = azure_client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT, messages=messages,
+            temperature=0.1, max_completion_tokens=2000, stream=True,
+        )
+        for chunk in stream:
+            if chunk.choices:
+                content = getattr(chunk.choices[0].delta, "content", None)
+                if content:
+                    yield content
         return
 
     raise RuntimeError("No streaming-capable LLM backend available.")
